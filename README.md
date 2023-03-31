@@ -21,16 +21,16 @@
 
 ![image](https://user-images.githubusercontent.com/94633478/229085607-ac0c6e0a-6e87-4e6d-9b02-2c90bc9dc81b.png)
 
-Обозначение в файлах: 
-𝜙 : phi : lat[deg]   
-𝜆 : lmbda : lon[deg]
-h : h :  alt[m]
+Обозначение в файлах:  
+𝜙 : phi : lat[deg]  
+𝜆 : lmbda : lon[deg]  
+h : h :  alt[m]  
 
 ![image](https://user-images.githubusercontent.com/94633478/229085534-a57521ed-b858-4338-8040-3bd09154787a.png)
 
 
-истинный курс : heading[deg] 
-тангаж : pitch[deg]
-крен : roll[deg]
-
+истинный курс : heading[deg]  
+тангаж : pitch[deg]  
+крен : roll[deg]  
+  
 ![image](https://user-images.githubusercontent.com/94633478/229085408-5d33f928-97db-4185-8e2f-954f67525c7c.png)
