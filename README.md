@@ -50,3 +50,7 @@ h : h :  alt[m]
 крен : roll[deg]  
   
 ![image](https://user-images.githubusercontent.com/94633478/229085408-5d33f928-97db-4185-8e2f-954f67525c7c.png)
+
+
+К доп задаче по начальной выставке ( постановка преподавателя)
+![image](https://user-images.githubusercontent.com/94633478/229555797-84dc799f-2bc2-4c55-a707-90d9bca58399.png)
