@@ -1,0 +1,155 @@
+import numpy as np
+import pandas as pd
+import time
+import matplotlib.pyplot as plt
+
+
+def gravity(phi, h, a) -> np.float64:
+    """
+        Модельное значение ускореня силы тяжести с учетом его зависимости от широты и высоты
+        Формула Гельмерта с поправкой
+    """
+    c2 = 0.005302   # beta1
+    c3 = 0.000007   # beta2
+    c4 = 0.00014    # delta g
+    ge = 9.78030
+    # np.divide(2.0, 4.0)= 0.5 - деление
+    return np.float64(ge * (1 + c2 * np.power((np.sin(phi)), 2) - c3 * np.power((np.sin(2 * phi)), 2) -
+                            2 * np.divide(h, a)) - c4)
+
+
+def l_orientation(theta, psi, gamma) -> np.array:
+    """
+        Получение матрицы ориентации
+    """
+
+    ans = np.array([[np.cos(theta)*np.sin(psi), np.cos(theta)*np.cos(psi), np.sin(theta)],
+                   [-np.sin(theta)*np.sin(psi)*np.cos(gamma)+np.cos(psi)*np.sin(gamma),
+                   -np.sin(theta)*np.cos(psi)*np.cos(gamma)-np.sin(psi)*np.sin(gamma),
+                   np.cos(theta)*np.cos(gamma)],
+                   [np.sin(theta)*np.sin(psi)*np.sin(gamma)+np.cos(psi)*np.cos(gamma),
+                   np.sin(theta)*np.cos(psi)*np.sin(gamma)-np.sin(psi)*np.cos(gamma),
+                   -np.cos(theta)*np.sin(gamma)]])
+    return ans
+
+
+def l_reverse(matrx):
+    """
+        Возвращает углы по матрицы L
+        Функция arctan2() вычисляет arctan(x1/x2) и
+         возвращает значение угла в правильном квадранте (четверти координатной плоскости).
+    """
+    psi = np.arctan2(matrx[0, 0], matrx[0, 1])
+    theta = np.arctan2(matrx[0, 2], np.sqrt(matrx[0, 0] ** 2 + matrx[0, 1] ** 2))
+    gamma = np.arctan2(-matrx[2, 2], matrx[1, 2])
+    return psi, theta, gamma
+
+
+def angular_velocity_matrix(omega) -> np.array:
+
+    """
+    Получает на вход вектор угловой скорости и составляет по нему матрицу омега с крышкой
+    """
+    return np.array([[0, omega[2], -omega[1]],
+                     [-omega[2], 0, omega[0]],
+                     [omega[1], -omega[0], 0]])
+
+
+def radius_of_curvature(a, e, phi):
+    """
+    Вычисление радиуса кривизны сечений модельного эллипсоида
+    :param phi: широта в градусах
+    :param a: большая полуось Земли в метрах
+    :param e: эксцентриситет Земли
+    :return: R_E, R_N - радиусы кривизны Земли в направлении оси вращения и нормали к поверхности соответственно
+Радиус кривизны в направлении экватора (Equatorial Radius of Curvature) обозначается как $R_E$.
+ Он определяется как радиус кривизны земной поверхности в точке на экваторе, то есть
+ как расстояние от центра Земли до поверхности Земли в точке на экваторе.
+ Этот радиус кривизны используется для описания формы земной поверхности в направлении,
+  перпендикулярном оси вращения Земли.
+Радиус кривизны в направлении полюса (Polar Radius of Curvature) обозначается как $R_N$.
+ Он определяется как радиус кривизны земной поверхности в точке на полюсе,
+  то есть как расстояние от центра Земли до поверхности Земли в точке на полюсе.
+  Этот радиус кривизны используется для описания формы земной поверхности в направлении, параллельном оси вращения Земли.
+Значения $R_E$ и $R_N$ зависят от геодезической широты (latitude) $\varphi$ в данной точке и эллипсоида,
+который используется для описания формы Земли.
+    """
+
+    r_e = np.float64(np.divide(a, np.sqrt(1 - np.power(e * np.sin(phi),2))))
+    r_n = np.float64(np.divide(a * (1 - np.power(e,2)) , np.power((np.sqrt(1 - np.power(e,2) * np.power(np.sin(phi),2))),3)))
+    return r_e, r_n
+
+
+def integrable(a, omega, dt):
+    omega_norm = np.linalg.norm(omega)
+    omega_matrix = angular_velocity_matrix(omega)
+    sin_omega_dt = np.sin(omega_norm * dt)
+    cos_omega_dt = np.cos(omega_norm * dt)
+    omega_norm_sq = omega_norm * omega_norm
+    a_new = np.eye(3) + (sin_omega_dt / omega_norm) * omega_matrix + ((1 - cos_omega_dt) / omega_norm_sq) \
+                 * omega_matrix @ omega_matrix
+    return a_new.dot(a)
+
+
+imu = pd.read_fwf('imu.txt')
+trj = pd.read_fwf('trj.txt')
+#print(imu.columns.tolist())
+
+#Мировые константы
+a = np.float64(6378137)   # большая полуось эллипса
+b = np.float64(6356752)   # малая полуось эллипса
+e = np.float64(0.006694478197993)  # квадрат эксцентриситета
+U = np.float64(0.00007292115)  # угловая скорость земли в градусы/c
+
+
+# начальная выставка - > берем данные до 2ух минут и осредняем, превращая в вектора
+force_z = (imu[['fz1[mps2]', 'fz2[mps2]', 'fz3[mps2]']][:12000].mean()).to_numpy()
+omega_z = (imu[['wz1[dps]', 'wz2[dps]', 'wz3[dps]']][:12000].mean()).to_numpy()
+
+L = np.array([np.cross(
+    omega_z, force_z) / np.linalg.norm(np.cross(omega_z, force_z)),
+              np.cross(force_z, np.cross(
+     omega_z, force_z)) / np.linalg.norm(np.cross(force_z, np.cross(
+      omega_z, force_z))), force_z / np.linalg.norm(force_z)]).transpose()
+
+
+heading, pitch, roll = l_reverse(L) # это без ошибок
+
+forcer = [force_z[2] + 0.00, force_z[2] + 0.01, force_z[2] + 0.02, force_z[2] + 0.03, force_z[2] + 0.04, force_z[2] + 0.05]
+a = force_z[2]
+angles = []
+headd = []
+pitchh = []
+rolll = []
+
+
+for i in range(6):
+    a = np.array([0, 0, 0.01 * i]) # шум , который мы добавляем к fz_3
+    L_new = np.array([np.cross(
+        omega_z, force_z+a) / np.linalg.norm(np.cross(omega_z, force_z+a)),
+                  np.cross(force_z, np.cross(
+                      omega_z, force_z+a)) / np.linalg.norm(np.cross(force_z+a, np.cross(
+                      omega_z, force_z+a))), (force_z+a) / np.linalg.norm(force_z+a)]).transpose()
+
+    heading1, pitch1, roll1 = l_reverse(L_new) # получаем углы и складываем их в списки
+    headd.append(heading1-heading) 
+    pitchh.append(pitch1-pitch)
+    rolll.append(roll1-roll)
+
+
+
+fig1 = plt.figure(1)
+axes1 = fig1.subplots()
+axes1.scatter([0,0.01,0.02,0.03,0.04, 0.05], headd, label='head-head+')
+axes1.scatter([0,0.01,0.02,0.03,0.04, 0.05], pitchh, label='pitch-pitch+')
+axes1.scatter([0,0.01,0.02,0.03,0.04, 0.05], rolll, label='roll-roll+')
+axes1.legend()
+axes1.grid()
+
+
+
+
+
+
+plt.show()
+
